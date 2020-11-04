@@ -499,6 +499,11 @@ object LoggingMarkers {
   val CONTAINER_CLIENT_RETRIES =
     LogMarkerToken(containerClient, "retries", counter)(MeasurementUnit.none)
 
+  def INVOKER_IGNITE_CMD(cmd: String) =
+    LogMarkerToken(invoker, "ignite", start, Some(cmd), Map("cmd" -> cmd))(MeasurementUnit.time.milliseconds)
+  def INVOKER_IGNITE_CMD_TIMEOUT(cmd: String) =
+    LogMarkerToken(invoker, "ignite", timeout, Some(cmd), Map("cmd" -> cmd))(MeasurementUnit.none)
+
   val CONTAINER_POOL_RESCHEDULED_ACTIVATION =
     LogMarkerToken(containerPool, "rescheduledActivation", counter)(MeasurementUnit.none)
   val CONTAINER_POOL_RUNBUFFER_COUNT =
