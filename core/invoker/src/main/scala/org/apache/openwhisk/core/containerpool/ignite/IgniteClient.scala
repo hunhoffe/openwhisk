@@ -21,13 +21,10 @@ import java.io.FileNotFoundException
 import java.nio.file.{Files, Paths}
 
 import akka.actor.ActorSystem
-
 import akka.event.Logging.{ErrorLevel, InfoLevel}
 import org.apache.openwhisk.common.{Logging, LoggingMarkers, MetricEmitter, TransactionId}
 import org.apache.openwhisk.core.ConfigKeys
 import org.apache.openwhisk.core.containerpool.docker.{
-  DockerClient,
-  DockerClientConfig,
   ProcessRunner,
   ProcessTimeoutException
 }
@@ -49,9 +46,7 @@ case class IgniteTimeoutConfig(create: Duration,
 
 case class IgniteClientConfig(timeouts: IgniteTimeoutConfig)
 
-class IgniteClient(dockerClient: DockerClient,
-                   config: IgniteClientConfig = loadConfigOrThrow[IgniteClientConfig](ConfigKeys.igniteClient),
-                   dockerConfig: DockerClientConfig = loadConfigOrThrow[DockerClientConfig](ConfigKeys.dockerClient))(
+class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientConfig](ConfigKeys.igniteClient))(
   override implicit val executionContext: ExecutionContext,
   implicit val system: ActorSystem,
   implicit val log: Logging)
@@ -61,18 +56,19 @@ class IgniteClient(dockerClient: DockerClient,
   protected val igniteCmd: Seq[String] = {
     val alternatives = List("/usr/bin/ignite", "/usr/local/bin/ignite")
 
-    val dockerBin = Try {
+    val igniteBin = Try {
       alternatives.find(a => Files.isExecutable(Paths.get(a))).get
     } getOrElse {
       throw new FileNotFoundException(s"Couldn't locate ignite binary (tried: ${alternatives.mkString(", ")}).")
     }
-    Seq(dockerBin, "-q")
+    Seq(igniteBin, "-q")
   }
 
   // Invoke ignite CLI to determine client version.
   // If the ignite client version cannot be determined, an exception will be thrown and instance initialization will fail.
   // Rationale: if we cannot invoke `ignite version` successfully, it is unlikely subsequent `ignite` invocations will succeed.
   protected def getClientVersion(): String = {
+    // hunhoffe: fix formatting.
     //TODO Ignite currently does not support formatting. So just get and log the verbatim version details
     val vf = executeProcess(igniteCmd ++ Seq("version"), config.timeouts.version)
       .andThen {
@@ -101,13 +97,18 @@ class IgniteClient(dockerClient: DockerClient,
   }
 
   override def inspectIPAddress(containerId: ContainerId)(implicit transid: TransactionId): Future[ContainerAddress] =
-    dockerClient.inspectIPAddress(containerId, "bridge")
+    // hunhoffe: change to ignite
+    // This commend works: sudo ignite inspect VM db954c191491a1c1 -t "{{.Status.IPAddresses}}" 
+    runCmd(
+      Seq("inspect", "VM", containerId.asString, "--template", s"{{.Status.IPAddresses}}"),
+      config.timeouts.inspect).flatMap {
+        // hunhoffe: I don't know if '<no value>' is how ignite reports no value.
+      case "<no value>" => Future.failed(new NoSuchElementException)
+      case stdout       => Future.successful(ContainerAddress(stdout))
+    }
 
   override def containerId(igniteId: IgniteId)(implicit transid: TransactionId): Future[ContainerId] = {
-    //Each ignite vm would be backed by a Docker container whose name would be `ignite-<vm id>`
-    //Use that to find the backing containerId
-    dockerClient
-      .runCmd(Seq("inspect", "--format", s"{{.Id}}", s"ignite-${igniteId.asString}"), config.timeouts.inspect)
+    runCmd(Seq("inspect", "VM", igniteId.asString, "--template", s"{{.ObjectMeta.UID}}"), config.timeouts.inspect)
       .flatMap {
         case "<no value>" => Future.failed(new NoSuchElementException)
         case stdout       => Future.successful(ContainerId(stdout))
@@ -126,7 +127,8 @@ class IgniteClient(dockerClient: DockerClient,
     else {
       importsInFlight.getOrElseUpdate(
         image, {
-          runCmd(Seq("image", "import", image), config.timeouts.create)
+          // hunhoffe: adding runtime is a temporary fix 
+          runCmd(Seq("image", "import", "--runtime", "docker", image), config.timeouts.create)
             .map { stdout =>
               log.info(this, s"Imported image $image - $stdout")
               true
@@ -148,19 +150,18 @@ class IgniteClient(dockerClient: DockerClient,
 
   override def listRunningVMs()(implicit transid: TransactionId): Future[Seq[VMInfo]] = {
     //Each ignite vm has a backing container whose label is set to vm name and name to vm id
-    val filter = "--format='{{.ID }}|{{ .Label \"ignite.name\" }}|{{.Names}}'"
-    val cmd = Seq("ps", "--no-trunc", filter)
+    val filter = "--template='{{.ObjectMeta.Name}}|{{.ObjectMeta.UID}}'"
+    val cmd = Seq("ps", filter)
     runCmd(cmd, config.timeouts.ps).map(_.linesIterator.toSeq.map(VMInfo.apply))
   }
 }
 
-case class VMInfo(containerId: ContainerId, igniteId: IgniteId, name: String)
+case class VMInfo(igniteId: IgniteId, name: String)
 
 object VMInfo {
   def apply(value: String): VMInfo = {
-    val Array(conatinerId, name, vmId) = value.split("|")
-    val igniteId = vmId.split("-").last
-    new VMInfo(ContainerId(conatinerId), IgniteId(igniteId), name)
+    val Array(vmId, name) = value.split("|")
+    new VMInfo(IgniteId(vmId), name)
   }
 }
 
@@ -188,4 +189,3 @@ trait IgniteApi {
     } yield Unit
   }
 }
-

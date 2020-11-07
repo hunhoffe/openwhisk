@@ -41,7 +41,7 @@ object IgniteContainerFactoryProvider extends ContainerFactoryProvider {
       actorSystem,
       actorSystem.dispatcher,
       logging,
-      new IgniteClient(dockerClient)(actorSystem.dispatcher, actorSystem, logging))
+      new IgniteClient()(actorSystem.dispatcher, actorSystem, logging))
   }
 }
 
