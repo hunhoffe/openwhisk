@@ -70,7 +70,7 @@ object IgniteContainer {
       .map(n => Seq("--name", n))
       .getOrElse(Seq.empty) ++ params
 
-    val imageToUse = image.publicImageName
+    val imageToUse = image.resolveImageName()
     for {
       importSuccessful <- ignite.importImage(imageToUse)
       igniteId <- ignite.run(imageToUse, args).recoverWith {
@@ -94,7 +94,7 @@ object IgniteContainer {
 
 }
 
-class IgniteContainer(protected val id: ContainerId, protected val addr: ContainerAddress, igniteId: IgniteId)(
+class IgniteContainer(protected val id: ContainerId, protected[core] val addr: ContainerAddress, igniteId: IgniteId)(
   implicit
   override protected val as: ActorSystem,
   protected val ec: ExecutionContext,

@@ -21,6 +21,7 @@ import java.io.FileNotFoundException
 import java.nio.file.{Files, Paths}
 
 import akka.actor.ActorSystem
+
 import akka.event.Logging.{ErrorLevel, InfoLevel}
 import org.apache.openwhisk.common.{Logging, LoggingMarkers, MetricEmitter, TransactionId}
 import org.apache.openwhisk.core.ConfigKeys
@@ -31,7 +32,8 @@ import org.apache.openwhisk.core.containerpool.docker.{
   ProcessTimeoutException
 }
 import org.apache.openwhisk.core.containerpool.{ContainerAddress, ContainerId}
-import pureconfig.loadConfigOrThrow
+import pureconfig._
+import pureconfig.generic.auto._
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration

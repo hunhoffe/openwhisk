@@ -23,7 +23,8 @@ import org.apache.openwhisk.core.containerpool.docker.DockerClientWithFileAccess
 import org.apache.openwhisk.core.{ConfigKeys, WhiskConfig}
 import org.apache.openwhisk.core.containerpool.{Container, ContainerFactory, ContainerFactoryProvider}
 import org.apache.openwhisk.core.entity.{ByteSize, ExecManifest, InvokerInstanceId}
-import pureconfig.loadConfigOrThrow
+import pureconfig._
+import pureconfig.generic.auto._
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
