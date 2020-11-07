@@ -268,8 +268,9 @@ object ConfigKeys {
   val sharedPackageExecuteOnly = s"whisk.shared-packages-execute-only"
   val swaggerUi = "whisk.swagger-ui"
 
-  val ignite = "whisk.ignite.client"
+  val ignite = "whisk.ignite"
   val igniteClient = s"$ignite.client"
+  val igniteContainerFactory = s"$ignite.container-factory"
 
   val disableStoreResult = s"$activation.disable-store-result"
   val unstoredLogsEnabled = s"$activation.unstored-logs-enabled"
