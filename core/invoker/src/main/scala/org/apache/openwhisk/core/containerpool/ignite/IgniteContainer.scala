@@ -39,10 +39,6 @@ import spray.json._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-case class IgniteId(asString: String) {
-  require(asString.nonEmpty, "IgniteId must not be empty")
-}
-
 object IgniteContainer {
 
   def create(transid: TransactionId,
@@ -73,7 +69,7 @@ object IgniteContainer {
     val imageToUse = image.resolveImageName()
     for {
       importSuccessful <- ignite.importImage(imageToUse)
-      igniteId <- ignite.run(imageToUse, args).recoverWith {
+      containerId <- ignite.run(imageToUse, args).recoverWith {
         case _ =>
           if (importSuccessful) {
             Future.failed(WhiskContainerStartupError(Messages.resourceProvisionError))
@@ -81,20 +77,19 @@ object IgniteContainer {
             Future.failed(BlackboxStartupError(Messages.imagePullError(imageToUse)))
           }
       }
-      containerId <- ignite.containerId(igniteId)
       ip <- ignite.inspectIPAddress(containerId).recoverWith {
         // remove the container immediately if inspect failed as
         // we cannot recover that case automatically
         case _ =>
-          ignite.rm(igniteId)
+          ignite.rm(containerId)
           Future.failed(WhiskContainerStartupError(Messages.resourceProvisionError))
       }
-    } yield new IgniteContainer(containerId, ip, igniteId)
+    } yield new IgniteContainer(containerId, ip)
   }
 
 }
 
-class IgniteContainer(protected val id: ContainerId, protected[core] val addr: ContainerAddress, igniteId: IgniteId)(
+class IgniteContainer(protected val id: ContainerId, protected[core] val addr: ContainerAddress)(
   implicit
   override protected val as: ActorSystem,
   protected val ec: ExecutionContext,
@@ -104,7 +99,7 @@ class IgniteContainer(protected val id: ContainerId, protected[core] val addr: C
 
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
     super.destroy()
-    ignite.stopAndRemove(igniteId)
+    ignite.stopAndRemove(containerId)
   }
 
   private val logMsg = "LogMessage are collected via Docker CLI"
@@ -112,6 +107,6 @@ class IgniteContainer(protected val id: ContainerId, protected[core] val addr: C
     implicit transid: TransactionId): Source[ByteString, Any] =
     Source.single(ByteString(LogLine(logMsg, "stdout", Instant.now.toString).toJson.compactPrint))
 
-  override def toString() = s"igniteId: ${igniteId.asString}, docker: ${id.asString}, address: $addr"
+  //override def toString() = s"igniteId: ${igniteId.asString}, docker: ${id.asString}, address: $addr"
 }
 

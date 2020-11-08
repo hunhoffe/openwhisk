@@ -107,16 +107,18 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
       case stdout       => Future.successful(ContainerAddress(stdout))
     }
 
-  override def containerId(igniteId: IgniteId)(implicit transid: TransactionId): Future[ContainerId] = {
-    runCmd(Seq("inspect", "VM", igniteId.asString, "--template", s"{{.ObjectMeta.UID}}"), config.timeouts.inspect)
+  /*
+  override def containerId(containerId: ContainerId)(implicit transid: TransactionId): Future[ContainerId] = {
+    runCmd(Seq("inspect", "VM", containerId.asString, "--template", s"{{.ObjectMeta.UID}}"), config.timeouts.inspect)
       .flatMap {
         case "<no value>" => Future.failed(new NoSuchElementException)
         case stdout       => Future.successful(ContainerId(stdout))
       }
   }
+  */
 
-  override def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[IgniteId] = {
-    runCmd(Seq("run", image) ++ args, config.timeouts.run).map(IgniteId.apply)
+  override def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId] = {
+    runCmd(Seq("run", image) ++ args, config.timeouts.run).map(ContainerId.apply)
   }
 
   private val importedImages = new TrieMap[String, Boolean]()
@@ -142,26 +144,16 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
     }
   }
 
-  override def rm(igniteId: IgniteId)(implicit transid: TransactionId): Future[Unit] =
-    runCmd(Seq("vm", "rm", igniteId.asString), config.timeouts.rm).map(_ => ())
+  override def rm(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit] =
+    runCmd(Seq("vm", "rm", containerId.asString), config.timeouts.rm).map(_ => ())
 
-  override def stop(igniteId: IgniteId)(implicit transid: TransactionId): Future[Unit] =
-    runCmd(Seq("vm", "stop", igniteId.asString), config.timeouts.rm).map(_ => ())
+  override def stop(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit] =
+    runCmd(Seq("vm", "stop", containerId.asString), config.timeouts.rm).map(_ => ())
 
-  override def listRunningVMs()(implicit transid: TransactionId): Future[Seq[VMInfo]] = {
-    //Each ignite vm has a backing container whose label is set to vm name and name to vm id
-    val filter = "--template='{{.ObjectMeta.Name}}|{{.ObjectMeta.UID}}'"
-    val cmd = Seq("ps", filter)
-    runCmd(cmd, config.timeouts.ps).map(_.linesIterator.toSeq.map(VMInfo.apply))
-  }
-}
-
-case class VMInfo(igniteId: IgniteId, name: String)
-
-object VMInfo {
-  def apply(value: String): VMInfo = {
-    val Array(vmId, name) = value.split("|")
-    new VMInfo(IgniteId(vmId), name)
+  override def listRunningVMs()(implicit transid: TransactionId): Future[Seq[ContainerId]] = {
+    //val filter = "--template='{{.ObjectMeta.UID}}'"
+    val cmd = Seq("ps", "-q")
+    runCmd(cmd, config.timeouts.ps).map(_.linesIterator.toSeq.map(ContainerId.apply))
   }
 }
 
@@ -170,22 +162,22 @@ trait IgniteApi {
 
   def inspectIPAddress(containerId: ContainerId)(implicit transid: TransactionId): Future[ContainerAddress]
 
-  def containerId(igniteId: IgniteId)(implicit transid: TransactionId): Future[ContainerId]
+  //def containerId(containerId: ContainerId)(implicit transid: TransactionId): Future[ContainerId]
 
-  def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[IgniteId]
+  def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId]
 
   def importImage(image: String)(implicit transid: TransactionId): Future[Boolean]
 
-  def rm(igniteId: IgniteId)(implicit transid: TransactionId): Future[Unit]
+  def rm(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit]
 
-  def stop(igniteId: IgniteId)(implicit transid: TransactionId): Future[Unit]
+  def stop(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit]
 
-  def listRunningVMs()(implicit transid: TransactionId): Future[Seq[VMInfo]]
+  def listRunningVMs()(implicit transid: TransactionId): Future[Seq[ContainerId]]
 
-  def stopAndRemove(igniteId: IgniteId)(implicit transid: TransactionId): Future[Unit] = {
+  def stopAndRemove(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit] = {
     for {
-      _ <- stop(igniteId)
-      _ <- rm(igniteId)
+      _ <- stop(containerId)
+      _ <- rm(containerId)
     } yield Unit
   }
 }

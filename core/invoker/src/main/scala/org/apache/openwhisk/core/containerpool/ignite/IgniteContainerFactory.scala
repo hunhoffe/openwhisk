@@ -78,11 +78,12 @@ class IgniteContainerFactory(instance: InvokerInstanceId)(implicit actorSystem: 
     implicit val transid = TransactionId.invoker
     val cleaning =
       ignite.listRunningVMs().flatMap { vms =>
-        val prefix = s"${ContainerFactory.containerNamePrefix(instance)}_"
-        val ourVms = vms.filter(_.name.startsWith(prefix))
-        logging.info(this, s"removing ${ourVms.size} action containers.")
-        val removals = ourVms.map { vm =>
-          ignite.stopAndRemove(vm.igniteId)
+        // hunhoffe TODO: add in filter
+        //val prefix = s"${ContainerFactory.containerNamePrefix(instance)}_"
+        //val ourVms = vms.filter(_.name.startsWith(prefix))
+        logging.info(this, s"removing ${vms.size} action containers.")
+        val removals = vms.map { vm =>
+          ignite.stopAndRemove(vm)
         }
         Future.sequence(removals)
       }
