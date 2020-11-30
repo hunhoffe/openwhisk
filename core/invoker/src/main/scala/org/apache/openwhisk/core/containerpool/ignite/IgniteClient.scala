@@ -118,7 +118,10 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
   */
 
   override def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId] = {
-    runCmd(Seq("run", image) ++ args, config.timeouts.run).map(ContainerId.apply)
+    runCmd(Seq("run", image) ++ args, config.timeouts.run).flatMap {
+      case ""     => Future.failed(new NoSuchElementException)
+      case stdout => Future.successful(ContainerId(stdout.trim))
+    }
   }
 
   private val importedImages = new TrieMap[String, Boolean]()
@@ -152,8 +155,8 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
 
   override def listRunningVMs()(implicit transid: TransactionId): Future[Seq[ContainerId]] = {
     //val filter = "--template='{{.ObjectMeta.UID}}'"
-    val cmd = Seq("ps", "-q")
-    runCmd(cmd, config.timeouts.ps).map(_.linesIterator.toSeq.map(ContainerId.apply))
+    val cmd = Seq("ps")
+    runCmd(cmd, config.timeouts.ps).map(_.linesIterator.toSeq.map(_.trim).map(ContainerId.apply))
   }
 }
 
