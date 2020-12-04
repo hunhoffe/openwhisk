@@ -19,7 +19,7 @@ FROM openwhisk/action-nodejs-v10:1.16.0 AS ownode
 FROM weaveworks/ignite-centos
 
 RUN curl -sL https://rpm.nodesource.com/setup_10.x | bash -
-RUN sudo yum -y install nodejs
+RUN sudo yum -y install nodejs-10.21.0
 
 COPY --from=ownode /nodejsAction /nodejsAction
 COPY --from=ownode /node_modules /node_modules
