@@ -126,9 +126,10 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
 
   private val importedImages = new TrieMap[String, Boolean]()
   private val importsInFlight = TrieMap[String, Future[Boolean]]()
-  override def importImage(image: String)(implicit transid: TransactionId): Future[Boolean] = {
+
+  def pull(image: String)(implicit transid: TransactionId): Future[Unit] = {
     //TODO Add support for latest
-    if (importedImages.contains(image)) Future.successful(true)
+    if (importedImages.contains(image)) Future.successful(())
     else {
       importsInFlight.getOrElseUpdate(
         image, {
@@ -144,6 +145,8 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
                 importedImages.put(image, true)
             }
         })
+        // hunhoffe: TODO ugly code, fix it.
+        Future.successful(())
     }
   }
 
@@ -153,7 +156,7 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
   override def stop(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit] =
     runCmd(Seq("vm", "stop", containerId.asString), config.timeouts.rm).map(_ => ())
 
-  override def listRunningVMs()(implicit transid: TransactionId): Future[Seq[ContainerId]] = {
+  override def ps()(implicit transid: TransactionId): Future[Seq[ContainerId]] = {
     //val filter = "--template='{{.ObjectMeta.UID}}'"
     val cmd = Seq("ps")
     runCmd(cmd, config.timeouts.ps).map(_.linesIterator.toSeq.map(_.trim).map(ContainerId.apply))
@@ -169,13 +172,13 @@ trait IgniteApi {
 
   def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId]
 
-  def importImage(image: String)(implicit transid: TransactionId): Future[Boolean]
+  def pull(image: String)(implicit transid: TransactionId): Future[Unit]
 
   def rm(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit]
 
   def stop(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit]
 
-  def listRunningVMs()(implicit transid: TransactionId): Future[Seq[ContainerId]]
+  def ps()(implicit transid: TransactionId): Future[Seq[ContainerId]]
 
   def stopAndRemove(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit] = {
     for {
@@ -184,3 +187,6 @@ trait IgniteApi {
     } yield Unit
   }
 }
+
+/** Indicates any error while starting a container that leaves a broken container behind that needs to be removed */
+case class BrokenIgniteContainer(id: ContainerId, msg: String) extends Exception(msg)

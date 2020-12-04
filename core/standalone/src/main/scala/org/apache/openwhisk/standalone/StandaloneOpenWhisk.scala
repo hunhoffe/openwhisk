@@ -158,6 +158,7 @@ object StandaloneConfigKeys {
   val apiGwConfigKey = "whisk.standalone.api-gateway"
   val couchDBConfigKey = "whisk.standalone.couchdb"
   val userEventConfigKey = "whisk.standalone.user-events"
+  val useIgnite = "whisk.standalone.use-ignite"
 }
 
 object StandaloneOpenWhisk extends SLF4JLogging {
@@ -229,6 +230,11 @@ object StandaloneOpenWhisk extends SLF4JLogging {
     val owPort = conf.port()
     val (dataDir, workDir) = initializeDirs(conf)
     val (dockerClient, dockerSupport) = prepareDocker(conf)
+
+    // hunhoffe: TODO ugly code, fix
+    val (igniteClient, igniteSupport) = if (Try(System.getProperty("whisk.standalone.use-ignite", "false").toBoolean).getOrElse(false)) {
+      prepareIgnite(conf)
+    } else ((), ())
 
     val defaultSvcs = Seq(
       ServiceContainer(owPort, s"http://${StandaloneDockerSupport.getLocalHostName()}:$owPort", "Controller"))
@@ -423,6 +429,19 @@ object StandaloneOpenWhisk extends SLF4JLogging {
     //Remove any existing launched containers
     dockerSupport.cleanup()
     (dockerClient, dockerSupport)
+  }
+
+  private def prepareIgnite(conf: Conf)(implicit logging: Logging,
+                                        as: ActorSystem,
+                                        ec: ExecutionContext): (StandaloneIgniteClient, StandaloneIgniteSupport) = {
+    //In dev mode disable the pull
+    val pullDisabled = conf.devMode()
+    val igniteClient = new StandaloneIgniteClient(pullDisabled)
+    val igniteSupport = new StandaloneIgniteSupport(igniteClient)
+
+    //Remove any existing launched containers
+    igniteSupport.cleanup()
+    (igniteClient, igniteSupport)
   }
 
   private def startApiGateway(conf: Conf, dockerClient: StandaloneDockerClient, dockerSupport: StandaloneDockerSupport)(

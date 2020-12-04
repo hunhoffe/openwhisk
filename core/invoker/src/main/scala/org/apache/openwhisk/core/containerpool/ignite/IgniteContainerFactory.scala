@@ -77,7 +77,7 @@ class IgniteContainerFactory(instance: InvokerInstanceId)(implicit actorSystem: 
   private def removeAllActionContainers(): Unit = {
     implicit val transid = TransactionId.invoker
     val cleaning =
-      ignite.listRunningVMs().flatMap { vms =>
+      ignite.ps().flatMap { vms =>
         // hunhoffe TODO: add in filter
         //val prefix = s"${ContainerFactory.containerNamePrefix(instance)}_"
         //val ourVms = vms.filter(_.name.startsWith(prefix))

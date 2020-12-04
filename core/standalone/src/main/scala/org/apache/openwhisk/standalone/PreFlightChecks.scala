@@ -37,9 +37,11 @@ case class PreFlightChecks(conf: Conf) extends AnsiColor {
   private val warn = st("WARN")
   private val cliDownloadUrl = "https://s.apache.org/openwhisk-cli-download"
   private val dockerUrl = "https://docs.docker.com/install/"
+  private val igniteUrl = "https://github.com/weaveworks/ignite"
 
   //Support for host.docker.internal is from 18.03
   private val supportedDockerVersion = DockerVersion("18.03")
+  private val supportedIgniteVersion = IgniteVersion("0.7.1")
 
   def run(): Unit = {
     println(separator)
@@ -49,6 +51,11 @@ case class PreFlightChecks(conf: Conf) extends AnsiColor {
     println(s"Local Internal Name: ${StandaloneDockerSupport.getLocalHostInternalName()}")
     println()
     checkForDocker()
+
+    if (Try(System.getProperty("whisk.standalone.use-ignite", "false").toBoolean).getOrElse(false)) {
+      checkForIgnite()
+    }
+
     checkForWsk()
     checkForPorts()
     println()
@@ -87,6 +94,40 @@ case class PreFlightChecks(conf: Conf) extends AnsiColor {
 
   private def dockerVersion = version("docker --version '{{.Client.Version}}'")
 
+  def checkForIgnite() = {
+    val igniteExistsResult = Try("ignite version -o short".!(noopLogger)).getOrElse(-1)
+    if (igniteExistsResult != 0) {
+      println(s"$failed 'ignite' cli not found.")
+      println(s"\t Install ignite from $igniteUrl")
+    } else {
+      val versionCmdOutput = igniteVersion
+      println(s"$pass 'ignite' cli found. $versionCmdOutput")
+
+      //Wrap in try to discard any issue related to version parsing
+      Try(checkIgniteVersion(versionCmdOutput)).failed.foreach(t =>
+        println(s"Error occurred while parsing version - ${t.getMessage}"))
+
+      checkIgniteIsRunning()
+      //Other things we can possibly check for
+      //1. add check for minimal supported ignite version
+      //2. should we also run `docker run hello-world` (or rather, an analagous cmd for ignite) to see if we can execute ignite run command
+      //This command takes 2-4 secs. So running it by default for every run should be avoided
+    }
+  }
+
+  private def checkIgniteVersion(versionCmdOutput: String)(implicit ordering: Ordering[IgniteVersion]): Unit = {
+    val dv = IgniteVersion.fromVersionCommand(versionCmdOutput)
+    if (dv < supportedIgniteVersion) {
+      println(s"$failed 'ignite' version $dv older than minimum supported $supportedIgniteVersion")
+    } else {
+      println(s"$pass 'ignite' version $dv is newer than minimum supported $supportedIgniteVersion")
+    }
+  }
+
+  private def igniteVersion = version("ignite version -o short")
+
+
+
   private def version(cmd: String) = Try(cmd !! (noopLogger)).map(v => s"(${v.trim})").getOrElse("")
 
   private def checkDockerIsRunning(): Unit = {
@@ -95,6 +136,15 @@ case class PreFlightChecks(conf: Conf) extends AnsiColor {
       println(s"$failed 'docker' not found to be running. Failed to run 'docker info'")
     } else {
       println(s"$pass 'docker' is running.")
+    }
+  }
+
+  private def checkIgniteIsRunning(): Unit = {
+    val ignitePsResult = Try("ignite ps".!(noopLogger)).getOrElse(-1)
+    if (ignitePsResult != 0) {
+      println(s"$failed 'ignite' not found to be running. Failed to run 'ignite info'")
+    } else {
+      println(s"$pass 'ignite' is running.")
     }
   }
 

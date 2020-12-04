@@ -25,7 +25,6 @@ import akka.util.ByteString
 import org.apache.openwhisk.common.{Logging, TransactionId}
 import org.apache.openwhisk.core.containerpool.logging.LogLine
 import org.apache.openwhisk.core.containerpool.{
-  BlackboxStartupError,
   Container,
   ContainerAddress,
   ContainerId,
@@ -68,14 +67,10 @@ object IgniteContainer {
 
     val imageToUse = image.resolveImageName()
     for {
-      importSuccessful <- ignite.importImage(imageToUse)
+      // hunhoffe: TODO ugly code, fix
+      _ <- ignite.pull(imageToUse)
       containerId <- ignite.run(imageToUse, args).recoverWith {
-        case _ =>
-          if (importSuccessful) {
-            Future.failed(WhiskContainerStartupError(Messages.resourceProvisionError))
-          } else {
-            Future.failed(BlackboxStartupError(Messages.imagePullError(imageToUse)))
-          }
+        case _ => Future.failed(WhiskContainerStartupError(Messages.resourceProvisionError))
       }
       ip <- ignite.inspectIPAddress(containerId).recoverWith {
         // remove the container immediately if inspect failed as
