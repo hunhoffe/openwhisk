@@ -15,8 +15,7 @@
 # limitations under the License.
 #
 
-FROM openwhisk/action-nodejs-v12:1.14.0-incubating AS ownode
-
+FROM openwhisk/action-nodejs-v10:1.16.0 AS ownode
 FROM weaveworks/ignite-centos
 
 RUN curl -sL https://rpm.nodesource.com/setup_10.x | bash -

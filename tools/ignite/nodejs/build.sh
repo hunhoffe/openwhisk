@@ -16,4 +16,4 @@
 # limitations under the License.
 #
 
-docker build -t whisk/ignite-nodejs-v12:latest  .
+docker build -t openwhisk/ignite-nodejs-v10:latest  .
