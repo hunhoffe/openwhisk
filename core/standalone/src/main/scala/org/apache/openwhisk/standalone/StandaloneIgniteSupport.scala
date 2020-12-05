@@ -178,8 +178,8 @@ object StandaloneIgniteSupport {
 class StandaloneIgniteClient(pullDisabled: Boolean)(implicit log: Logging, as: ActorSystem, ec: ExecutionContext)
     extends IgniteClient()(ec, as, log) {
 
-  override def pull(image: String)(implicit transid: TransactionId): Future[Unit] = {
-    if (pullDisabled) Future.successful(()) else super.pull(image)
+  override def pull(image: String)(implicit transid: TransactionId): Future[Boolean] = {
+    if (pullDisabled) Future.successful(true) else super.pull(image)
   }
 
   override def runCmd(args: Seq[String], timeout: Duration)(implicit transid: TransactionId): Future[String] =

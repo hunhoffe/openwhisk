@@ -117,36 +117,42 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
   }
   */
 
+  private val importedImages = new TrieMap[String, Boolean]()
+  private val importsInFlight = TrieMap[String, Future[Boolean]]()
+  override def pull(image: String)(implicit transid: TransactionId): Future[Boolean] = {
+    //TODO Add support for latest
+    if (importedImages.contains(image)) Future.successful(true)
+    else {
+      importsInFlight.getOrElseUpdate(
+        image, {
+          val importIds = Await.result(runCmd(Seq("image", "ls", "-q"), config.timeouts.create).map(
+            _.linesIterator.toSeq.map(_.trim).map(ContainerId.apply)), config.timeouts.create)
+          val importNames = importIds.map(x => runCmd(Seq("inspect", "image", x.asString, "--template", s"{{.Spec.OCI}}"), 
+            config.timeouts.create)).map(x => Await.result(x, config.timeouts.create))
+          if (importNames.contains(image)) {
+            importsInFlight.remove(image)
+            importedImages.put(image, true)
+            Future.successful(true)
+          } else {
+            runCmd(Seq("image", "import", image), config.timeouts.create)
+              .map { stdout =>
+                log.info(this, s"Imported image $image - $stdout")
+                true
+              }
+                .andThen {
+                  case _ =>
+                    importsInFlight.remove(image)
+                    importedImages.put(image, true)
+                }
+              }
+          })
+    }
+  }
+  
   override def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId] = {
     runCmd(Seq("run", image) ++ args, config.timeouts.run).flatMap {
       case ""     => Future.failed(new NoSuchElementException)
       case stdout => Future.successful(ContainerId(stdout.trim))
-    }
-  }
-
-  private val importedImages = new TrieMap[String, Boolean]()
-  private val importsInFlight = TrieMap[String, Future[Boolean]]()
-
-  def pull(image: String)(implicit transid: TransactionId): Future[Unit] = {
-    //TODO Add support for latest
-    if (importedImages.contains(image)) Future.successful(())
-    else {
-      importsInFlight.getOrElseUpdate(
-        image, {
-          // hunhoffe: adding runtime is a temporary fix 
-          runCmd(Seq("image", "import", "--runtime", "docker", image), config.timeouts.create)
-            .map { stdout =>
-              log.info(this, s"Imported image $image - $stdout")
-              true
-            }
-            .andThen {
-              case _ =>
-                importsInFlight.remove(image)
-                importedImages.put(image, true)
-            }
-        })
-        // hunhoffe: TODO ugly code, fix it.
-        Future.successful(())
     }
   }
 
@@ -172,7 +178,7 @@ trait IgniteApi {
 
   def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId]
 
-  def pull(image: String)(implicit transid: TransactionId): Future[Unit]
+  def pull(image: String)(implicit transid: TransactionId): Future[Boolean]
 
   def rm(containerId: ContainerId)(implicit transid: TransactionId): Future[Unit]
 
