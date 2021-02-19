@@ -528,8 +528,8 @@ object ContainerPool {
    */
   protected[containerpool] def schedule[A](action: ExecutableWhiskAction,
                                            invocationNamespace: EntityName,
-                                           idles: Map[A, ContainerData]): Option[(A, ContainerData)] = {
-    //logging.info(this, s"freshen: containerPool.schedule - searching idles to find WarmedData...");
+                                           idles: Map[A, ContainerData])(implicit logging: Logging): Option[(A, ContainerData)] = {
+    logging.info(this, s"freshen: containerPool.schedule - searching idles to find WarmedData...");
 
     idles
       .find {
@@ -537,14 +537,14 @@ object ContainerPool {
         case _                                                                                   => false
       }
       .orElse {
-        //logging.info(this, s"freshen: containerPool.schedule - searching idles to find WarmingData...")
+        logging.info(this, s"freshen: containerPool.schedule - searching idles to find WarmingData...")
         idles.find {
           case (_, c @ WarmingData(_, `invocationNamespace`, `action`, _, _)) if c.hasCapacity() => true
           case _                                                                                 => false
         }
       }
       .orElse {
-        //logging.info(this, s"freshen: containerPool.schedule - searching idles to find WarmingColdData...")
+        logging.info(this, s"freshen: containerPool.schedule - searching idles to find WarmingColdData...")
         idles.find {
           case (_, c @ WarmingColdData(`invocationNamespace`, `action`, _, _)) if c.hasCapacity() => true
           case _                                                                                  => false
@@ -566,8 +566,8 @@ object ContainerPool {
   @tailrec
   protected[containerpool] def remove[A](pool: Map[A, ContainerData],
                                          memory: ByteSize,
-                                         toRemove: List[A] = List.empty): List[A] = {
-    //logging.info(this, s"freshen: containerPool.remove - pool=${pool}, memory=${memory}, toRemove=${toRemove}")
+                                         toRemove: List[A] = List.empty)(implicit logging: Logging): List[A] = {
+    logging.info(this, s"freshen: containerPool.remove - pool=${pool}, memory=${memory}, toRemove=${toRemove}")
 
     // Try to find a Free container that does NOT have any active activations AND is initialized with any OTHER action
     val freeContainers = pool.collect {
@@ -582,7 +582,7 @@ object ContainerPool {
       // - there are still containers that can be removed
       // - there are enough free containers that can be removed
       val (ref, data) = freeContainers.minBy(_._2.lastUsed)
-      //logging.info(this, s"freshen: containerPool.remove - selected candidate for removal ref=${ref}, data=${data}, last_used=${data.lastUsed}, will make recursive call after")
+      logging.info(this, s"freshen: containerPool.remove - selected candidate for removal ref=${ref}, data=${data}, last_used=${data.lastUsed}, will make recursive call after")
       // Catch exception if remaining memory will be negative
       val remainingMemory = Try(memory - data.memoryLimit).getOrElse(0.B)
       remove(freeContainers - ref, remainingMemory, toRemove ++ List(ref))
