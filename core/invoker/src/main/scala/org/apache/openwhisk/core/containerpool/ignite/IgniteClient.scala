@@ -72,7 +72,7 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
     //TODO Ignite currently does not support formatting. So just get and log the verbatim version details
     val vf = executeProcess(igniteCmd ++ Seq("version"), config.timeouts.version)
       .andThen {
-        case Success(version) => log.info(this, s"Detected ignite client version $version")
+        case Success(version) => log.info(this, s"Hello there, I have Detected ignite client version $version")
         case Failure(e) =>
           log.error(this, s"Failed to determine ignite client version: ${e.getClass} - ${e.getMessage}")
       }
@@ -116,11 +116,13 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
       }
   }
   */
-
+  private val importedKernels = new TrieMap[String,Boolean]()
+  private val kernelsInFlight = TrieMap[String,Future[Boolean]]()
   override def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId] = {
-    runCmd(Seq("run", image) ++ args, config.timeouts.run).flatMap {
-      case ""     => Future.failed(new NoSuchElementException)
-      case stdout => Future.successful(ContainerId(stdout.trim))
+     println(image)
+     runCmd(Seq("run", image) ++ args, config.timeouts.run).flatMap {
+     case ""     => Future.failed(new NoSuchElementException)
+     case stdout => Future.successful(ContainerId(stdout.trim))
     }
   }
 
