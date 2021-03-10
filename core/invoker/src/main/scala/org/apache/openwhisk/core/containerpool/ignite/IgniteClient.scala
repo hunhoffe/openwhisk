@@ -19,6 +19,7 @@ package org.apache.openwhisk.core.containerpool.ignite
 
 import java.io.FileNotFoundException
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.Semaphore
 
 import akka.actor.ActorSystem
 import akka.event.Logging.{ErrorLevel, InfoLevel}
@@ -36,6 +37,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.blocking
 
 case class IgniteTimeoutConfig(create: Duration,
                                version: Duration,
@@ -118,12 +120,24 @@ class IgniteClient(config: IgniteClientConfig = loadConfigOrThrow[IgniteClientCo
   */
   private val importedKernels = new TrieMap[String,Boolean]()
   private val kernelsInFlight = TrieMap[String,Future[Boolean]]()
+  protected val runSem = new Semaphore(1,true)
   override def run(image: String, args: Seq[String])(implicit transid: TransactionId): Future[ContainerId] = {
-     println(image)
-     runCmd(Seq("run", image) ++ args, config.timeouts.run).flatMap {
-     case ""     => Future.failed(new NoSuchElementException)
-     case stdout => Future.successful(ContainerId(stdout.trim))
-    }
+    //println(image)
+     Future {
+       blocking {
+          runSem.acquire()
+          }
+     }.flatMap { _ =>
+       runCmd(Seq("run",image) ++ args,config.timeouts.run)
+         .andThen {
+             case _ =>runSem.release()
+         }
+         .map(ContainerId.apply)
+      }
+    // runCmd(Seq("run", image) ++ args, config.timeouts.run).flatMap {
+    // case ""     => Future.failed(new NoSuchElementException)
+    // case stdout => Future.successful(ContainerId(stdout.trim))
+   // }
   }
 
   private val importedImages = new TrieMap[String, Boolean]()
